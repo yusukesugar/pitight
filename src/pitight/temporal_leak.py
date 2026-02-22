@@ -159,23 +159,3 @@ def no_leak(
         return wrapper
 
     return decorator
-
-
-# --- Pre-built boundaries for common ML patterns ---
-
-BOATRACE_BOUNDARY = TemporalBoundary(
-    forbidden_columns=frozenset({
-        "odds",
-        "payout",
-        "result",
-        "rank",
-        "is_win",
-        "is_place",
-        "return_rate",
-        "bet_result",
-    }),
-    forbidden_prefixes=("outcome_", "post_", "payout_"),
-    forbidden_substrings=("_result", "_payout", "_rank"),
-    allowed_stages=frozenset({"s70_candidates", "s80_eval"}),
-)
-"""Pre-built boundary for boat race prediction pipelines."""
