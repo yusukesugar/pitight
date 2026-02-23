@@ -1,4 +1,4 @@
-"""Tests for pitight.stage — PartitionedArtifact declarative lifecycle."""
+"""Tests for pitight.partitioned — PartitionedArtifact declarative lifecycle."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 
 from pitight.assertions import EmptyDataError, SchemaViolationError
-from pitight.stage import EmptyPolicy, InputSpec, PartitionedArtifact
+from pitight.partitioned import EmptyPolicy, InputSpec, PartitionedArtifact
 from pitight.temporal_leak import TemporalBoundary, TemporalLeakError
 
 
@@ -398,6 +398,6 @@ class TestHooks:
 class TestBackwardCompatibility:
     def test_stage_alias(self) -> None:
         """Stage is an alias for PartitionedArtifact."""
-        from pitight.stage import Stage
+        from pitight.partitioned import Stage
 
         assert Stage is PartitionedArtifact

@@ -13,7 +13,7 @@ from pitight.assertions import (
     safe_merge,
 )
 from pitight.config_hash import HashableConfig, canonicalize
-from pitight.stage import EmptyPolicy, InputSpec, PartitionedArtifact, Stage
+from pitight.partitioned import EmptyPolicy, InputSpec, PartitionedArtifact, Stage
 from pitight.schema_stats import infer_schema, infer_stats, write_schema_and_stats
 from pitight.temporal_leak import TemporalBoundary, TemporalLeakError, check_leak, no_leak
 from pitight.partition import (
