@@ -1,6 +1,6 @@
 """pitight — Pipeline integrity checker for ML workflows."""
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 
 from pitight.artifact import Artifact, ArtifactRegistry
 from pitight.assertions import (
@@ -28,6 +28,7 @@ from pitight.partition import (
     update_success_marker,
     write_manifest,
 )
+from pitight.range_driver import RangeDriver, RunResult
 from pitight.validation import (
     ExecutionError,
     IdentityCalculationError,
@@ -74,4 +75,6 @@ __all__ = [
     "scan_present_months",
     "update_success_marker",
     "write_manifest",
+    "RangeDriver",
+    "RunResult",
 ]
