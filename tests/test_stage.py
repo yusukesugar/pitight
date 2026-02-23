@@ -77,6 +77,34 @@ class TestBasicLifecycle:
         assert (meta_dir / f"{base}.stats.json").exists()
 
 
+class TestIsComplete:
+    def test_not_complete_before_run(self, stage: AddOneStage) -> None:
+        """Before run(), is_complete returns False."""
+        assert stage.is_complete("2025-01") is False
+
+    def test_complete_after_run(
+        self, stage: AddOneStage, source_df: pd.DataFrame
+    ) -> None:
+        """After run(), is_complete returns True."""
+        stage.run("2025-01", {"source": source_df})
+        assert stage.is_complete("2025-01") is True
+
+    def test_other_period_still_incomplete(
+        self, stage: AddOneStage, source_df: pd.DataFrame
+    ) -> None:
+        """Running one period doesn't complete another."""
+        stage.run("2025-01", {"source": source_df})
+        assert stage.is_complete("2025-01") is True
+        assert stage.is_complete("2025-02") is False
+
+    def test_output_path_matches_run(
+        self, stage: AddOneStage, source_df: pd.DataFrame
+    ) -> None:
+        """output_path() returns the same path that run() writes to."""
+        out = stage.run("2025-01", {"source": source_df})
+        assert stage.output_path("2025-01") == out
+
+
 class TestInputValidation:
     def test_missing_required_column(
         self, stage: AddOneStage, tmp_path: Path

@@ -119,6 +119,27 @@ class Stage(ABC):
         return None
 
     # ------------------------------------------------------------------
+    # Completion check
+    # ------------------------------------------------------------------
+
+    def output_path(self, period: str) -> Path:
+        """Return the expected parquet path for a period."""
+        return hive_path(
+            self.data_root / self.artifact_name,
+            period,
+            freq=self.freq,
+        )
+
+    def is_complete(self, period: str) -> bool:
+        """Check if output parquet exists for a period.
+
+        Data-presence-based completion: independent of who requested it
+        or what period range the orchestrator used. Solves the Luigi
+        run_id mismatch problem where data exists but manifest doesn't.
+        """
+        return self.output_path(period).exists()
+
+    # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
 
@@ -174,11 +195,7 @@ class Stage(ABC):
             self._handle_empty(upstream_empty, tag)
 
         # 9. Write parquet + schema.json + stats.json
-        out_path = hive_path(
-            self.data_root / self.artifact_name,
-            period,
-            freq=self.freq,
-        )
+        out_path = self.output_path(period)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         df.to_parquet(out_path, index=False)
         logger.info("%s: wrote %d rows → %s", tag, len(df), out_path)
