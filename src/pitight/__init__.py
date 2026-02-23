@@ -1,6 +1,6 @@
 """pitight — Pipeline integrity checker for ML workflows."""
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 from pitight.artifact import Artifact, ArtifactRegistry
 from pitight.assertions import (
@@ -13,6 +13,7 @@ from pitight.assertions import (
     safe_merge,
 )
 from pitight.config_hash import HashableConfig, canonicalize
+from pitight.partitioned import EmptyPolicy, InputSpec, PartitionedArtifact, Stage
 from pitight.schema_stats import infer_schema, infer_stats, write_schema_and_stats
 from pitight.temporal_leak import TemporalBoundary, TemporalLeakError, check_leak, no_leak
 from pitight.partition import (
@@ -49,6 +50,10 @@ __all__ = [
     "assert_unique_key",
     "canonicalize",
     "check_leak",
+    "EmptyPolicy",
+    "InputSpec",
+    "PartitionedArtifact",
+    "Stage",
     "infer_schema",
     "infer_stats",
     "no_leak",
