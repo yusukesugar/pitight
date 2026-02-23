@@ -1,4 +1,4 @@
-"""Stage — declarative lifecycle for pipeline stages.
+"""PartitionedArtifact — declarative lifecycle for a single-partition artifact.
 
 Composes pitight building blocks (assertions, temporal_leak, partition,
 schema_stats) into a single ABC that handles:
@@ -8,12 +8,20 @@ schema_stats) into a single ABC that handles:
 - Parquet + metadata writing
 - Empty data policies
 
-Usage:
-    from pitight.stage import Stage, InputSpec, EmptyPolicy
+A PartitionedArtifact represents one concrete output (e.g. a feature table)
+within a pipeline stage. One stage (package) can contain multiple artifacts:
 
-    class MyStage(Stage):
-        artifact_name = "s30_features"
-        OUTPUT_SCHEMA = {"race_id": "string", "feature_a": "float64"}
+    s30_features/           ← stage (package)
+    ├── binary_454          ← PartitionedArtifact
+    ├── lane_features       ← PartitionedArtifact
+    └── player_history      ← PartitionedArtifact
+
+Usage:
+    from pitight.stage import PartitionedArtifact, InputSpec, EmptyPolicy
+
+    class ComputeBinary454(PartitionedArtifact):
+        artifact_name = "s30_features/binary_454"
+        OUTPUT_SCHEMA = {"race_id": "string", "feat_454": "float64"}
         REQUIRED_INPUTS = {
             "keys": InputSpec(required_cols=["race_id", "lane_no"]),
         }
@@ -21,8 +29,8 @@ Usage:
 
         def compute(self, inputs, period):
             df = inputs["keys"]
-            df["feature_a"] = 1.0
-            return df[["race_id", "feature_a"]]
+            df["feat_454"] = 1.0
+            return df[["race_id", "feat_454"]]
 """
 
 from __future__ import annotations
@@ -61,8 +69,11 @@ class EmptyPolicy(str, Enum):
     WRITE_EMPTY_IF_UPSTREAM_EMPTY = "WRITE_EMPTY_IF_UPSTREAM_EMPTY"
 
 
-class Stage(ABC):
-    """Abstract base class for a pipeline stage with declarative lifecycle.
+class PartitionedArtifact(ABC):
+    """Abstract base class for a single-partition artifact with declarative lifecycle.
+
+    Represents one concrete output within a pipeline stage.
+    ``artifact_name`` may include a stage prefix (e.g. ``"s30_features/binary_454"``).
 
     Subclasses must define class-level contracts and implement ``compute()``.
     """
@@ -150,7 +161,7 @@ class Stage(ABC):
         *,
         upstream_empty: bool = False,
     ) -> Path:
-        """Execute the full stage lifecycle for one period.
+        """Execute the full artifact lifecycle for one period.
 
         Args:
             period: Partition period string (e.g. "2025-01").
@@ -261,3 +272,7 @@ class Stage(ABC):
             f"{tag}: compute returned empty DataFrame "
             f"(upstream_empty=False, policy=WRITE_EMPTY_IF_UPSTREAM_EMPTY)"
         )
+
+
+# Backward compatibility alias
+Stage = PartitionedArtifact

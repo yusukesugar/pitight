@@ -1,4 +1,4 @@
-"""Tests for pitight.stage — Stage declarative lifecycle."""
+"""Tests for pitight.stage — PartitionedArtifact declarative lifecycle."""
 
 from __future__ import annotations
 
@@ -9,19 +9,19 @@ import pandas as pd
 import pytest
 
 from pitight.assertions import EmptyDataError, SchemaViolationError
-from pitight.stage import EmptyPolicy, InputSpec, Stage
+from pitight.stage import EmptyPolicy, InputSpec, PartitionedArtifact
 from pitight.temporal_leak import TemporalBoundary, TemporalLeakError
 
 
 # ============================================================
-# Concrete test stage
+# Concrete test artifact
 # ============================================================
 
 
-class AddOneStage(Stage):
-    """Minimal concrete stage for testing."""
+class AddOneArtifact(PartitionedArtifact):
+    """Minimal concrete artifact for testing."""
 
-    artifact_name = "test_add_one"
+    artifact_name = "test_stage/add_one"
     OUTPUT_SCHEMA = {"id": "int64", "value": "float64"}
     REQUIRED_INPUTS = {
         "source": InputSpec(required_cols=["id", "raw_value"]),
@@ -47,8 +47,8 @@ def source_df() -> pd.DataFrame:
 
 
 @pytest.fixture()
-def stage(tmp_path: Path) -> AddOneStage:
-    return AddOneStage(data_root=tmp_path)
+def artifact(tmp_path: Path) -> AddOneArtifact:
+    return AddOneArtifact(data_root=tmp_path)
 
 
 # ============================================================
@@ -58,10 +58,10 @@ def stage(tmp_path: Path) -> AddOneStage:
 
 class TestBasicLifecycle:
     def test_basic_lifecycle(
-        self, stage: AddOneStage, source_df: pd.DataFrame, tmp_path: Path
+        self, artifact: AddOneArtifact, source_df: pd.DataFrame, tmp_path: Path
     ) -> None:
         """compute → writes parquet + _meta."""
-        out = stage.run("2025-01", {"source": source_df})
+        out = artifact.run("2025-01", {"source": source_df})
 
         assert out.exists()
         assert out.suffix == ".parquet"
@@ -76,62 +76,71 @@ class TestBasicLifecycle:
         assert (meta_dir / f"{base}.schema.json").exists()
         assert (meta_dir / f"{base}.stats.json").exists()
 
+    def test_hierarchical_artifact_name(
+        self, artifact: AddOneArtifact, source_df: pd.DataFrame, tmp_path: Path
+    ) -> None:
+        """artifact_name with stage prefix creates nested directory."""
+        out = artifact.run("2025-01", {"source": source_df})
+        # test_stage/add_one/data/year=2025/month=01/...
+        assert "test_stage" in str(out)
+        assert "add_one" in str(out)
+
 
 class TestIsComplete:
-    def test_not_complete_before_run(self, stage: AddOneStage) -> None:
+    def test_not_complete_before_run(self, artifact: AddOneArtifact) -> None:
         """Before run(), is_complete returns False."""
-        assert stage.is_complete("2025-01") is False
+        assert artifact.is_complete("2025-01") is False
 
     def test_complete_after_run(
-        self, stage: AddOneStage, source_df: pd.DataFrame
+        self, artifact: AddOneArtifact, source_df: pd.DataFrame
     ) -> None:
         """After run(), is_complete returns True."""
-        stage.run("2025-01", {"source": source_df})
-        assert stage.is_complete("2025-01") is True
+        artifact.run("2025-01", {"source": source_df})
+        assert artifact.is_complete("2025-01") is True
 
     def test_other_period_still_incomplete(
-        self, stage: AddOneStage, source_df: pd.DataFrame
+        self, artifact: AddOneArtifact, source_df: pd.DataFrame
     ) -> None:
         """Running one period doesn't complete another."""
-        stage.run("2025-01", {"source": source_df})
-        assert stage.is_complete("2025-01") is True
-        assert stage.is_complete("2025-02") is False
+        artifact.run("2025-01", {"source": source_df})
+        assert artifact.is_complete("2025-01") is True
+        assert artifact.is_complete("2025-02") is False
 
     def test_output_path_matches_run(
-        self, stage: AddOneStage, source_df: pd.DataFrame
+        self, artifact: AddOneArtifact, source_df: pd.DataFrame
     ) -> None:
         """output_path() returns the same path that run() writes to."""
-        out = stage.run("2025-01", {"source": source_df})
-        assert stage.output_path("2025-01") == out
+        out = artifact.run("2025-01", {"source": source_df})
+        assert artifact.output_path("2025-01") == out
 
 
 class TestInputValidation:
     def test_missing_required_column(
-        self, stage: AddOneStage, tmp_path: Path
+        self, artifact: AddOneArtifact
     ) -> None:
         """Missing required col → SchemaViolationError."""
         bad_df = pd.DataFrame({"id": [1], "wrong_col": [10.0]})
         with pytest.raises(SchemaViolationError, match="missing columns"):
-            stage.run("2025-01", {"source": bad_df})
+            artifact.run("2025-01", {"source": bad_df})
 
     def test_missing_input_key(
-        self, stage: AddOneStage, source_df: pd.DataFrame, tmp_path: Path
+        self, artifact: AddOneArtifact, source_df: pd.DataFrame
     ) -> None:
         """Missing input key → SchemaViolationError."""
         with pytest.raises(SchemaViolationError, match="missing input keys"):
-            stage.run("2025-01", {"wrong_key": source_df})
+            artifact.run("2025-01", {"wrong_key": source_df})
 
-    def test_empty_input_raises(self, stage: AddOneStage, tmp_path: Path) -> None:
+    def test_empty_input_raises(self, artifact: AddOneArtifact) -> None:
         """Empty df with allow_empty=False → EmptyDataError."""
         empty_df = pd.DataFrame({"id": pd.Series([], dtype="int64"), "raw_value": pd.Series([], dtype="float64")})
         with pytest.raises(EmptyDataError, match="input 'source' is empty"):
-            stage.run("2025-01", {"source": empty_df})
+            artifact.run("2025-01", {"source": empty_df})
 
     def test_empty_input_allowed(self, tmp_path: Path) -> None:
         """Empty df with allow_empty=True passes input validation."""
 
-        class AllowEmptyStage(Stage):
-            artifact_name = "test_allow_empty"
+        class AllowEmptyArtifact(PartitionedArtifact):
+            artifact_name = "test_stage/allow_empty"
             OUTPUT_SCHEMA = {"id": "int64"}
             REQUIRED_INPUTS = {
                 "source": InputSpec(required_cols=["id"], allow_empty=True),
@@ -143,9 +152,9 @@ class TestInputValidation:
             ) -> pd.DataFrame:
                 return inputs["source"][["id"]]
 
-        s = AllowEmptyStage(data_root=tmp_path)
+        a = AllowEmptyArtifact(data_root=tmp_path)
         empty_df = pd.DataFrame({"id": pd.Series([], dtype="int64")})
-        out = s.run("2025-01", {"source": empty_df})
+        out = a.run("2025-01", {"source": empty_df})
         assert out.exists()
 
 
@@ -153,8 +162,8 @@ class TestOutputSchemaEnforcement:
     def test_missing_output_column(self, tmp_path: Path) -> None:
         """Missing output col → SchemaViolationError."""
 
-        class BadOutputStage(Stage):
-            artifact_name = "test_bad_output"
+        class BadOutputArtifact(PartitionedArtifact):
+            artifact_name = "test_stage/bad_output"
             OUTPUT_SCHEMA = {"id": "int64", "value": "float64", "extra": "string"}
             REQUIRED_INPUTS = {
                 "source": InputSpec(required_cols=["id", "raw_value"]),
@@ -168,18 +177,18 @@ class TestOutputSchemaEnforcement:
                 df["value"] = df["raw_value"] + 1
                 return df[["id", "value"]]  # missing "extra"
 
-        s = BadOutputStage(data_root=tmp_path)
+        a = BadOutputArtifact(data_root=tmp_path)
         source_df = pd.DataFrame({"id": [1], "raw_value": [10.0]})
         with pytest.raises(SchemaViolationError, match="output missing columns"):
-            s.run("2025-01", {"source": source_df})
+            a.run("2025-01", {"source": source_df})
 
     def test_column_order_enforced(
         self, tmp_path: Path, source_df: pd.DataFrame
     ) -> None:
         """Output columns match OUTPUT_SCHEMA order."""
 
-        class ReverseStage(Stage):
-            artifact_name = "test_reverse"
+        class ReverseArtifact(PartitionedArtifact):
+            artifact_name = "test_stage/reverse"
             OUTPUT_SCHEMA = {"id": "int64", "value": "float64"}
             REQUIRED_INPUTS = {
                 "source": InputSpec(required_cols=["id", "raw_value"]),
@@ -194,8 +203,8 @@ class TestOutputSchemaEnforcement:
                 # Return columns in reversed order
                 return df[["value", "id"]]
 
-        s = ReverseStage(data_root=tmp_path)
-        out = s.run("2025-01", {"source": source_df})
+        a = ReverseArtifact(data_root=tmp_path)
+        out = a.run("2025-01", {"source": source_df})
         result = pd.read_parquet(out)
         assert list(result.columns) == ["id", "value"]
 
@@ -207,8 +216,8 @@ class TestTemporalLeak:
             forbidden_columns=frozenset({"value"}),
         )
 
-        class LeakyStage(Stage):
-            artifact_name = "test_leaky"
+        class LeakyArtifact(PartitionedArtifact):
+            artifact_name = "test_stage/leaky"
             OUTPUT_SCHEMA = {"id": "int64", "value": "float64"}
             REQUIRED_INPUTS = {
                 "source": InputSpec(required_cols=["id", "raw_value"]),
@@ -222,17 +231,16 @@ class TestTemporalLeak:
                 df["value"] = df["raw_value"] + 1
                 return df[["id", "value"]]
 
-        s = LeakyStage(data_root=tmp_path, boundary=boundary)
+        a = LeakyArtifact(data_root=tmp_path, boundary=boundary)
         source_df = pd.DataFrame({"id": [1], "raw_value": [10.0]})
         with pytest.raises(TemporalLeakError):
-            s.run("2025-01", {"source": source_df})
+            a.run("2025-01", {"source": source_df})
 
     def test_no_boundary_skips_check(
-        self, stage: AddOneStage, source_df: pd.DataFrame
+        self, artifact: AddOneArtifact, source_df: pd.DataFrame
     ) -> None:
         """boundary=None → no error even with columns that would be forbidden."""
-        # stage has boundary=None by default
-        out = stage.run("2025-01", {"source": source_df})
+        out = artifact.run("2025-01", {"source": source_df})
         assert out.exists()
 
 
@@ -240,8 +248,8 @@ class TestEmptyPolicy:
     def test_empty_policy_fail(self, tmp_path: Path) -> None:
         """Empty output with FAIL policy → EmptyDataError."""
 
-        class EmptyOutputStage(Stage):
-            artifact_name = "test_empty_fail"
+        class EmptyOutputArtifact(PartitionedArtifact):
+            artifact_name = "test_stage/empty_fail"
             OUTPUT_SCHEMA = {"id": "int64", "value": "float64"}
             REQUIRED_INPUTS = {
                 "source": InputSpec(required_cols=["id", "raw_value"], allow_empty=True),
@@ -256,16 +264,16 @@ class TestEmptyPolicy:
                     value=pd.Series([], dtype="float64"),
                 )
 
-        s = EmptyOutputStage(data_root=tmp_path)
+        a = EmptyOutputArtifact(data_root=tmp_path)
         empty_df = pd.DataFrame({"id": pd.Series([], dtype="int64"), "raw_value": pd.Series([], dtype="float64")})
         with pytest.raises(EmptyDataError, match="compute returned empty"):
-            s.run("2025-01", {"source": empty_df})
+            a.run("2025-01", {"source": empty_df})
 
     def test_empty_policy_write_empty(self, tmp_path: Path) -> None:
         """Empty output with WRITE_EMPTY → writes 0-row parquet."""
 
-        class WriteEmptyStage(Stage):
-            artifact_name = "test_write_empty"
+        class WriteEmptyArtifact(PartitionedArtifact):
+            artifact_name = "test_stage/write_empty"
             OUTPUT_SCHEMA = {"id": "int64", "value": "float64"}
             REQUIRED_INPUTS = {
                 "source": InputSpec(required_cols=["id"], allow_empty=True),
@@ -279,9 +287,9 @@ class TestEmptyPolicy:
                     {"id": pd.Series([], dtype="int64"), "value": pd.Series([], dtype="float64")}
                 )
 
-        s = WriteEmptyStage(data_root=tmp_path)
+        a = WriteEmptyArtifact(data_root=tmp_path)
         empty_df = pd.DataFrame({"id": pd.Series([], dtype="int64")})
-        out = s.run("2025-01", {"source": empty_df})
+        out = a.run("2025-01", {"source": empty_df})
         assert out.exists()
         result = pd.read_parquet(out)
         assert len(result) == 0
@@ -289,8 +297,8 @@ class TestEmptyPolicy:
     def test_empty_policy_upstream_empty_true(self, tmp_path: Path) -> None:
         """upstream_empty=True with WRITE_EMPTY_IF_UPSTREAM_EMPTY → writes."""
 
-        class ConditionalStage(Stage):
-            artifact_name = "test_cond"
+        class ConditionalArtifact(PartitionedArtifact):
+            artifact_name = "test_stage/cond"
             OUTPUT_SCHEMA = {"id": "int64"}
             REQUIRED_INPUTS = {
                 "source": InputSpec(required_cols=["id"], allow_empty=True),
@@ -302,9 +310,9 @@ class TestEmptyPolicy:
             ) -> pd.DataFrame:
                 return pd.DataFrame({"id": pd.Series([], dtype="int64")})
 
-        s = ConditionalStage(data_root=tmp_path)
+        a = ConditionalArtifact(data_root=tmp_path)
         empty_df = pd.DataFrame({"id": pd.Series([], dtype="int64")})
-        out = s.run("2025-01", {"source": empty_df}, upstream_empty=True)
+        out = a.run("2025-01", {"source": empty_df}, upstream_empty=True)
         assert out.exists()
 
     def test_empty_policy_upstream_empty_false_raises(
@@ -312,8 +320,8 @@ class TestEmptyPolicy:
     ) -> None:
         """upstream_empty=False with WRITE_EMPTY_IF_UPSTREAM_EMPTY → raises."""
 
-        class ConditionalStage(Stage):
-            artifact_name = "test_cond2"
+        class ConditionalArtifact(PartitionedArtifact):
+            artifact_name = "test_stage/cond2"
             OUTPUT_SCHEMA = {"id": "int64"}
             REQUIRED_INPUTS = {
                 "source": InputSpec(required_cols=["id"], allow_empty=True),
@@ -325,10 +333,10 @@ class TestEmptyPolicy:
             ) -> pd.DataFrame:
                 return pd.DataFrame({"id": pd.Series([], dtype="int64")})
 
-        s = ConditionalStage(data_root=tmp_path)
+        a = ConditionalArtifact(data_root=tmp_path)
         empty_df = pd.DataFrame({"id": pd.Series([], dtype="int64")})
         with pytest.raises(EmptyDataError, match="upstream_empty=False"):
-            s.run("2025-01", {"source": empty_df}, upstream_empty=False)
+            a.run("2025-01", {"source": empty_df}, upstream_empty=False)
 
 
 class TestHooks:
@@ -338,8 +346,8 @@ class TestHooks:
         """preprocess, validate, postprocess, build_meta all called."""
         call_log: list[str] = []
 
-        class HookedStage(Stage):
-            artifact_name = "test_hooked"
+        class HookedArtifact(PartitionedArtifact):
+            artifact_name = "test_stage/hooked"
             OUTPUT_SCHEMA = {"id": "int64", "value": "float64"}
             REQUIRED_INPUTS = {
                 "source": InputSpec(required_cols=["id", "raw_value"]),
@@ -375,8 +383,8 @@ class TestHooks:
                 call_log.append("build_meta")
                 return {"custom": True}
 
-        s = HookedStage(data_root=tmp_path)
-        s.run("2025-01", {"source": source_df})
+        a = HookedArtifact(data_root=tmp_path)
+        a.run("2025-01", {"source": source_df})
 
         assert call_log == [
             "preprocess",
@@ -385,3 +393,11 @@ class TestHooks:
             "postprocess",
             "build_meta",
         ]
+
+
+class TestBackwardCompatibility:
+    def test_stage_alias(self) -> None:
+        """Stage is an alias for PartitionedArtifact."""
+        from pitight.stage import Stage
+
+        assert Stage is PartitionedArtifact
