@@ -1,6 +1,6 @@
 """pitight — Pipeline integrity checker for ML workflows."""
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 from pitight.artifact import Artifact, ArtifactRegistry
 from pitight.assertions import (
@@ -15,6 +15,18 @@ from pitight.assertions import (
 from pitight.config_hash import HashableConfig, canonicalize
 from pitight.schema_stats import infer_schema, infer_stats, write_schema_and_stats
 from pitight.temporal_leak import TemporalBoundary, TemporalLeakError, check_leak, no_leak
+from pitight.partition import (
+    build_manifest,
+    compute_coverage,
+    compute_schema_hash,
+    encode_identity,
+    hive_path,
+    resolve_expected_periods,
+    rollup_stats,
+    scan_present_months,
+    update_success_marker,
+    write_manifest,
+)
 from pitight.validation import (
     ExecutionError,
     IdentityCalculationError,
@@ -47,4 +59,14 @@ __all__ = [
     "ExecutionError",
     "IdentityCalculationError",
     "SourceValidationError",
+    "build_manifest",
+    "compute_coverage",
+    "compute_schema_hash",
+    "encode_identity",
+    "hive_path",
+    "resolve_expected_periods",
+    "rollup_stats",
+    "scan_present_months",
+    "update_success_marker",
+    "write_manifest",
 ]
