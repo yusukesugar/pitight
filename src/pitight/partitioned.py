@@ -11,26 +11,25 @@ schema_stats) into a single ABC that handles:
 A PartitionedArtifact represents one concrete output (e.g. a feature table)
 within a pipeline stage. One stage (package) can contain multiple artifacts:
 
-    s30_features/           ← stage (package)
-    ├── binary_454          ← PartitionedArtifact
-    ├── lane_features       ← PartitionedArtifact
-    └── player_history      ← PartitionedArtifact
+    features/                   ← stage (package)
+    ├── user_engagement         ← PartitionedArtifact
+    ├── session_summary         ← PartitionedArtifact
+    └── purchase_history        ← PartitionedArtifact
 
 Usage:
-    from pitight.stage import PartitionedArtifact, InputSpec, EmptyPolicy
+    from pitight.partitioned import PartitionedArtifact, InputSpec, EmptyPolicy
 
-    class ComputeBinary454(PartitionedArtifact):
-        artifact_name = "s30_features/binary_454"
-        OUTPUT_SCHEMA = {"race_id": "string", "feat_454": "float64"}
+    class UserEngagement(PartitionedArtifact):
+        artifact_name = "features/user_engagement"
+        OUTPUT_SCHEMA = {"user_id": "string", "sessions_7d": "int64"}
         REQUIRED_INPUTS = {
-            "keys": InputSpec(required_cols=["race_id", "lane_no"]),
+            "events": InputSpec(required_cols=["user_id", "event_type"]),
         }
         EMPTY_POLICY = EmptyPolicy.FAIL
 
         def compute(self, inputs, period):
-            df = inputs["keys"]
-            df["feat_454"] = 1.0
-            return df[["race_id", "feat_454"]]
+            df = inputs["events"]
+            return df.groupby("user_id").size().reset_index(name="sessions_7d")
 """
 
 from __future__ import annotations
