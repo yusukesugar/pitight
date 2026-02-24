@@ -1,6 +1,6 @@
 """pitight — Pipeline integrity checker for ML workflows."""
 
-__version__ = "0.7.0"
+__version__ = "0.7.1"
 
 from pitight.artifact import Artifact, ArtifactRegistry
 from pitight.assertions import (
@@ -27,6 +27,17 @@ from pitight.partition import (
     scan_present_months,
     update_success_marker,
     write_manifest,
+)
+from pitight.json_utils import json_serial, write_json_atomically
+from pitight.periods import (
+    add_months,
+    date_to_ym,
+    format_ym,
+    parse_ym,
+    prev_ym,
+    prev_ym_str,
+    ym_from_date_str,
+    ym_to_date,
 )
 from pitight.range_driver import RangeDriver, RunResult
 from pitight.validation import (
@@ -77,4 +88,14 @@ __all__ = [
     "write_manifest",
     "RangeDriver",
     "RunResult",
+    "add_months",
+    "date_to_ym",
+    "format_ym",
+    "json_serial",
+    "parse_ym",
+    "prev_ym",
+    "prev_ym_str",
+    "write_json_atomically",
+    "ym_from_date_str",
+    "ym_to_date",
 ]
