@@ -1,14 +1,19 @@
 """pitight — Pipeline integrity checker for ML workflows."""
 
-__version__ = "0.7.1"
+__version__ = "0.8.0"
 
 from pitight.artifact import Artifact, ArtifactRegistry
 from pitight.assertions import (
     EmptyDataError,
     SchemaViolationError,
+    anti_join_report,
+    assert_finite,
     assert_has_columns,
     assert_no_nulls,
     assert_not_empty,
+    assert_period_coverage,
+    assert_positive,
+    assert_single_period,
     assert_unique_key,
     safe_merge,
 )
@@ -56,9 +61,14 @@ __all__ = [
     "SchemaViolationError",
     "TemporalBoundary",
     "TemporalLeakError",
+    "anti_join_report",
+    "assert_finite",
     "assert_has_columns",
     "assert_no_nulls",
     "assert_not_empty",
+    "assert_period_coverage",
+    "assert_positive",
+    "assert_single_period",
     "assert_unique_key",
     "canonicalize",
     "check_leak",
