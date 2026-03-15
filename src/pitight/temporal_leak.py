@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import functools
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -116,6 +117,57 @@ def check_leak(
         logger.warning(msg)
 
     return violations
+
+
+def assert_feature_purity(
+    feature_cols: list[str] | Sequence[str],
+    boundary: TemporalBoundary,
+    *,
+    tag: str = "",
+) -> None:
+    """Raise TemporalLeakError if any feature column matches a forbidden pattern.
+
+    Unlike check_leak() which examines a DataFrame's columns, this function
+    validates a feature column *list* — the columns you intend to use as
+    model inputs. This catches cases where outcome columns (e.g. payout,
+    odds, rank) are accidentally included in the feature set.
+
+    Call this before model.fit(X[feature_cols], y).
+
+    Args:
+        feature_cols: Column names to be used as model features.
+        boundary: The temporal boundary rules defining forbidden columns.
+        tag: Optional context label included in the error message.
+
+    Raises:
+        TemporalLeakError: If any feature column matches a forbidden pattern.
+    """
+    violations: list[str] = []
+    reasons: dict[str, str] = {}
+
+    for col in feature_cols:
+        col_lower = col.lower()
+        if col in boundary.forbidden_columns or col_lower in boundary.forbidden_columns:
+            violations.append(col)
+            reasons[col] = "exact column match"
+            continue
+        if any(col_lower.startswith(p) for p in boundary.forbidden_prefixes):
+            violations.append(col)
+            reasons[col] = "prefix match"
+            continue
+        if any(s in col_lower for s in boundary.forbidden_substrings):
+            violations.append(col)
+            reasons[col] = "substring match"
+
+    if violations:
+        prefix = f"[{tag}] " if tag else ""
+        detail = ", ".join(f"{v} ({reasons[v]})" for v in violations)
+        msg = (
+            f"{prefix}Feature purity violation! "
+            f"Forbidden columns in feature list: {detail}. "
+            f"These outcome columns must not be used as training features."
+        )
+        raise TemporalLeakError(msg)
 
 
 def no_leak(

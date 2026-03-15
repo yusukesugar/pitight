@@ -21,7 +21,7 @@ from pitight.assertions import (
 from pitight.config_hash import HashableConfig, canonicalize
 from pitight.partitioned import EmptyPolicy, InputSpec, PartitionedArtifact, Stage
 from pitight.schema_stats import infer_schema, infer_stats, write_schema_and_stats
-from pitight.temporal_leak import TemporalBoundary, TemporalLeakError, check_leak, no_leak
+from pitight.temporal_leak import TemporalBoundary, TemporalLeakError, assert_feature_purity, check_leak, no_leak
 from pitight.partition import (
     build_manifest,
     compute_coverage,
@@ -71,6 +71,7 @@ __all__ = [
     "assert_period_coverage",
     "assert_positive",
     "assert_single_period",
+    "assert_feature_purity",
     "assert_unique_key",
     "canonicalize",
     "check_leak",
