@@ -8,6 +8,7 @@ from pitight.assertions import (
     anti_join_report,
     assert_finite,
     assert_has_columns,
+    assert_no_duplicate_features,
     assert_no_nulls,
     assert_not_empty,
     assert_period_coverage,
@@ -75,6 +76,39 @@ class TestSafeMerge:
         right = pd.DataFrame({"key": [1], "val": [20]})
         with pytest.raises(ValueError):
             safe_merge(left, right, on="key")
+
+
+# ============================================================
+# Feature list assertions
+# ============================================================
+
+
+class TestAssertNoDuplicateFeatures:
+    def test_pass_no_duplicates(self):
+        assert_no_duplicate_features(["age", "income", "score"], tag="test")
+
+    def test_pass_empty_list(self):
+        assert_no_duplicate_features([], tag="test")
+
+    def test_fail_with_duplicates(self):
+        with pytest.raises(SchemaViolationError, match="duplicate feature names"):
+            assert_no_duplicate_features(["age", "income", "age"], tag="test")
+
+    def test_error_message_includes_counts(self):
+        with pytest.raises(SchemaViolationError, match="'age': 3"):
+            assert_no_duplicate_features(
+                ["age", "income", "age", "age"], tag="test"
+            )
+
+    def test_tag_in_message(self):
+        with pytest.raises(SchemaViolationError, match=r"\[TrainFeatures\]"):
+            assert_no_duplicate_features(
+                ["x", "x"], tag="TrainFeatures"
+            )
+
+    def test_no_tag(self):
+        with pytest.raises(SchemaViolationError, match="duplicate feature names"):
+            assert_no_duplicate_features(["a", "a"])
 
 
 # ============================================================

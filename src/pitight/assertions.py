@@ -13,7 +13,8 @@ Usage:
 from __future__ import annotations
 
 import logging
-from typing import Any, Iterable
+from collections import Counter
+from typing import Any, Iterable, Sequence
 
 import numpy as np
 import pandas as pd
@@ -161,6 +162,43 @@ def safe_merge(
     """
     kwargs["suffixes"] = (None, None)
     return pd.merge(left, right, **kwargs)
+
+
+# ============================================================
+# Feature list assertions
+# ============================================================
+
+
+def assert_no_duplicate_features(
+    feature_cols: list[str] | Sequence[str],
+    *,
+    tag: str = "",
+) -> None:
+    """Fail if feature_cols contains duplicate names.
+
+    LightGBM and other ML frameworks crash or silently produce wrong results
+    when duplicate features are passed. Call this before model.fit().
+
+    Args:
+        feature_cols: List of feature column names.
+        tag: Context label for error messages.
+
+    Raises:
+        SchemaViolationError: If duplicate feature names are found.
+
+    Example:
+        >>> assert_no_duplicate_features(["age", "income", "age"], tag="TrainFeatures")
+        Traceback (most recent call last):
+            ...
+        pitight.assertions.SchemaViolationError: ...
+    """
+    counts = Counter(feature_cols)
+    dups = {name: cnt for name, cnt in counts.items() if cnt > 1}
+    if dups:
+        prefix = f"[{tag}] " if tag else ""
+        raise SchemaViolationError(
+            f"{prefix}duplicate feature names: {dups}"
+        )
 
 
 # ============================================================
