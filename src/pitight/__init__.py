@@ -3,6 +3,13 @@
 __version__ = "0.8.0"
 
 from pitight.artifact import Artifact, ArtifactRegistry
+from pitight.complete_checks import (
+    manifest_coverage_ok,
+    manifest_expected_present,
+    manifest_freshness_ok,
+    manifest_min_row_count,
+    upstream_newer_than,
+)
 from pitight.assertions import (
     EmptyDataError,
     SchemaViolationError,
@@ -94,6 +101,11 @@ __all__ = [
     "compute_schema_hash",
     "encode_identity",
     "hive_path",
+    "manifest_coverage_ok",
+    "manifest_expected_present",
+    "manifest_freshness_ok",
+    "manifest_min_row_count",
+    "upstream_newer_than",
     "resolve_expected_periods",
     "rollup_stats",
     "scan_present_months",
