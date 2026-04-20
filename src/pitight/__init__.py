@@ -4,6 +4,8 @@ __version__ = "0.8.0"
 
 from pitight.artifact import Artifact, ArtifactRegistry
 from pitight.complete_checks import (
+    days_elapsed_in_period,
+    expected_rows_for_period,
     manifest_coverage_ok,
     manifest_expected_present,
     manifest_freshness_ok,
@@ -101,6 +103,8 @@ __all__ = [
     "compute_schema_hash",
     "encode_identity",
     "hive_path",
+    "days_elapsed_in_period",
+    "expected_rows_for_period",
     "manifest_coverage_ok",
     "manifest_expected_present",
     "manifest_freshness_ok",

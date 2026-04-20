@@ -158,6 +158,34 @@ class FreshCompleteMixin:
     MAX_MANIFEST_AGE_SECONDS: float = 0.0  # 0 = disabled
     UPSTREAM_TOLERANCE_SECONDS: float = 2.0
 
+    def min_row_count_required(self) -> int:
+        """Return the row-count minimum to consider this task complete.
+
+        Default: returns the class-level :attr:`MIN_ROW_COUNT`. A value of
+        ``0`` disables the row-count check.
+
+        Override to compute dynamically — for example, from the elapsed
+        days in the task's period::
+
+            from pitight.complete_checks import expected_rows_for_period
+
+            class MonthlyTask(FreshCompleteMixin, luigi.Task):
+                ym = luigi.Parameter()
+
+                def min_row_count_required(self) -> int:
+                    return expected_rows_for_period(
+                        self.ym,
+                        rows_per_day=700,    # observed baseline
+                        safety_factor=0.5,   # allow 50% headroom
+                    )
+
+        A date-aware threshold prevents the rot that static thresholds
+        accumulate — a number that was "right" in January may be wrong in
+        April because row rates drift, schemas change, or the partition is
+        mid-build.
+        """
+        return self.MIN_ROW_COUNT
+
     def manifest_path(self) -> Path | None:
         """Return the path to this task's manifest.json, or None to disable.
 
@@ -233,8 +261,9 @@ class FreshCompleteMixin:
                 return False
 
         # Step 4: row-count sanity (if configured).
-        if self.MIN_ROW_COUNT > 0:
-            if not manifest_min_row_count(manifest, self.MIN_ROW_COUNT):
+        min_rc = self.min_row_count_required()
+        if min_rc > 0:
+            if not manifest_min_row_count(manifest, min_rc):
                 return False
 
         # Step 5: freshness (if configured).

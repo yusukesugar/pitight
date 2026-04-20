@@ -1,6 +1,7 @@
 import json
 import os
 import time
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -8,6 +9,7 @@ import pytest
 luigi = pytest.importorskip("luigi")
 
 from pitight.artifact import ArtifactRegistry
+from pitight.complete_checks import expected_rows_for_period
 from pitight.luigi_adapter import (
     FreshCompleteMixin,
     artifact_from_luigi_task,
@@ -176,6 +178,77 @@ class TestFreshCompleteMixinRowCount:
             },
         )
         assert task.complete() is True
+
+
+class TestFreshCompleteMixinDateAwareRowCount:
+    """`min_row_count_required()` override — date-aware thresholds."""
+
+    def _make_date_aware_task(self, tmp_path: Path, ym: str, pin_now: date):
+        root = tmp_path / "root"
+        y, m = ym.split("-")
+        parquet = root / "data" / f"year={y}" / f"month={m}" / f"part-{ym}.parquet"
+        parquet.parent.mkdir(parents=True, exist_ok=True)
+        parquet.write_bytes(b"stub")
+        manifest = root / "manifest.json"
+
+        class DateAwareTask(FreshCompleteMixin, luigi.Task):
+            ym = luigi.Parameter(default="2026-04")
+
+            def output(self):
+                return luigi.LocalTarget(parquet.as_posix())
+
+            def min_row_count_required(self):
+                return expected_rows_for_period(
+                    self.ym,
+                    rows_per_day=700,
+                    now=pin_now,
+                    safety_factor=0.5,
+                )
+
+        return DateAwareTask(ym=ym), manifest
+
+    def test_partial_rebuild_is_rejected_mid_month(self, tmp_path):
+        task, manifest = self._make_date_aware_task(
+            tmp_path, ym="2026-04", pin_now=date(2026, 4, 17)
+        )
+        _write_manifest(
+            manifest,
+            {
+                "coverage": {"coverage_ok": True},
+                "stats_rollup": {"row_count_total": 720},
+            },
+        )
+        # Required = 17 * 700 * 0.5 = 5950 > 720 → not complete.
+        assert task.complete() is False
+
+    def test_full_rebuild_is_accepted_mid_month(self, tmp_path):
+        task, manifest = self._make_date_aware_task(
+            tmp_path, ym="2026-04", pin_now=date(2026, 4, 17)
+        )
+        _write_manifest(
+            manifest,
+            {
+                "coverage": {"coverage_ok": True},
+                "stats_rollup": {"row_count_total": 12000},
+            },
+        )
+        # Required = 5950, observed = 12000 → complete.
+        assert task.complete() is True
+
+    def test_past_month_requires_full_length(self, tmp_path):
+        # Looking at 2026-03 from a 2026-04-17 vantage: full 31 days.
+        task, manifest = self._make_date_aware_task(
+            tmp_path, ym="2026-03", pin_now=date(2026, 4, 17)
+        )
+        _write_manifest(
+            manifest,
+            {
+                "coverage": {"coverage_ok": True},
+                "stats_rollup": {"row_count_total": 10000},
+            },
+        )
+        # Required = 31 * 700 * 0.5 = 10850 > 10000 → not complete.
+        assert task.complete() is False
 
 
 class TestFreshCompleteMixinFreshness:
