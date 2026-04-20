@@ -194,7 +194,8 @@ class TestDaysElapsedInPeriod:
     def test_daily_inside(self):
         assert days_elapsed_in_period("2026-04-17", date(2026, 4, 17)) == 1
 
-    def test_daily_after(self):
+    def test_daily_completed_returns_full_length(self):
+        # Any date after the daily period ends returns the full length (= 1).
         assert days_elapsed_in_period("2026-04-17", date(2026, 4, 18)) == 1
 
     def test_daily_before(self):
@@ -240,6 +241,15 @@ class TestExpectedRowsForPeriod:
         with pytest.raises(ValueError):
             expected_rows_for_period(
                 "2026-04", rows_per_day=-1, now=date(2026, 4, 17)
+            )
+
+    def test_rejects_negative_safety_factor(self):
+        with pytest.raises(ValueError):
+            expected_rows_for_period(
+                "2026-04",
+                rows_per_day=700,
+                now=date(2026, 4, 17),
+                safety_factor=-0.1,
             )
 
     def test_catches_partial_rebuild_shape(self):

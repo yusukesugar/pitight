@@ -137,6 +137,11 @@ def days_elapsed_in_period(period: str, now: date | None = None) -> int:
 
     Supports monthly (``YYYY-MM``) and daily (``YYYY-MM-DD``) period strings.
 
+    When ``now`` is omitted, :func:`datetime.date.today` is used, which
+    reads the process's local timezone. For cron jobs that run near
+    midnight across timezones (e.g. a UTC scheduler writing JST-aligned
+    partitions) pass ``now`` explicitly to avoid off-by-one errors.
+
     Examples:
         >>> days_elapsed_in_period("2026-04", date(2026, 4, 17))
         17
@@ -175,16 +180,23 @@ def expected_rows_for_period(
     Tune ``safety_factor`` up (e.g. 0.8) if the writer is very regular,
     down (e.g. 0.3) if inputs are bursty.
 
+    The return value is truncated to ``int`` (``math.floor`` semantics), so
+    threshold noise always falls on the permissive side — a computed 5950.9
+    becomes 5950, never 5951.
+
     Examples:
         >>> # 2026-04 mid-month with ~700 rows/day baseline:
         >>> expected_rows_for_period("2026-04", 700, date(2026, 4, 17), 0.5)
         5950
 
     Raises:
-        ValueError: if ``period`` is invalid or ``rows_per_day`` is negative.
+        ValueError: if ``period`` is invalid, ``rows_per_day`` is negative,
+            or ``safety_factor`` is negative.
     """
     if rows_per_day < 0:
         raise ValueError(f"rows_per_day must be >= 0, got {rows_per_day}")
+    if safety_factor < 0:
+        raise ValueError(f"safety_factor must be >= 0, got {safety_factor}")
     days = days_elapsed_in_period(period, now)
     return int(days * rows_per_day * safety_factor)
 
