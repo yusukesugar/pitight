@@ -5,9 +5,14 @@ from __future__ import annotations
 import json
 import os
 import time
+from datetime import date
 from pathlib import Path
 
+import pytest
+
 from pitight.complete_checks import (
+    days_elapsed_in_period,
+    expected_rows_for_period,
     manifest_coverage_ok,
     manifest_expected_present,
     manifest_freshness_ok,
@@ -161,3 +166,87 @@ class TestUpstreamNewerThan:
     def test_missing_upstream_skipped(self, tmp_path):
         self_m = _write_manifest(tmp_path / "self.json", {})
         assert upstream_newer_than(self_m, [tmp_path / "missing.json"]) == []
+
+
+class TestDaysElapsedInPeriod:
+    def test_monthly_mid_period(self):
+        assert days_elapsed_in_period("2026-04", date(2026, 4, 17)) == 17
+
+    def test_monthly_first_day(self):
+        assert days_elapsed_in_period("2026-04", date(2026, 4, 1)) == 1
+
+    def test_monthly_completed(self):
+        # April has 30 days; any date after that returns 30.
+        assert days_elapsed_in_period("2026-04", date(2026, 5, 10)) == 30
+
+    def test_monthly_not_started(self):
+        assert days_elapsed_in_period("2026-04", date(2026, 3, 31)) == 0
+
+    def test_monthly_february_leap_year(self):
+        assert days_elapsed_in_period("2024-02", date(2024, 3, 1)) == 29
+
+    def test_monthly_february_non_leap(self):
+        assert days_elapsed_in_period("2025-02", date(2025, 3, 1)) == 28
+
+    def test_monthly_december_year_boundary(self):
+        assert days_elapsed_in_period("2026-12", date(2027, 1, 15)) == 31
+
+    def test_daily_inside(self):
+        assert days_elapsed_in_period("2026-04-17", date(2026, 4, 17)) == 1
+
+    def test_daily_after(self):
+        assert days_elapsed_in_period("2026-04-17", date(2026, 4, 18)) == 1
+
+    def test_daily_before(self):
+        assert days_elapsed_in_period("2026-04-17", date(2026, 4, 16)) == 0
+
+    def test_invalid_format_raises(self):
+        with pytest.raises(ValueError):
+            days_elapsed_in_period("2026/04")
+
+    def test_default_now_is_today(self):
+        # Just verify it doesn't error; value depends on real today.
+        assert days_elapsed_in_period("2026-01") >= 0
+
+
+class TestExpectedRowsForPeriod:
+    def test_mid_month_applies_elapsed_days(self):
+        # 17 days × 700 rows/day × 0.5 safety = 5950
+        got = expected_rows_for_period(
+            "2026-04", rows_per_day=700, now=date(2026, 4, 17), safety_factor=0.5
+        )
+        assert got == 5950
+
+    def test_completed_month_uses_full_length(self):
+        # 30 days × 700 × 0.5 = 10500
+        got = expected_rows_for_period(
+            "2026-04", rows_per_day=700, now=date(2026, 5, 1), safety_factor=0.5
+        )
+        assert got == 10500
+
+    def test_before_period_returns_zero(self):
+        got = expected_rows_for_period(
+            "2026-04", rows_per_day=700, now=date(2026, 3, 1), safety_factor=0.5
+        )
+        assert got == 0
+
+    def test_safety_factor_one_equals_baseline_times_days(self):
+        got = expected_rows_for_period(
+            "2026-04", rows_per_day=700, now=date(2026, 4, 10), safety_factor=1.0
+        )
+        assert got == 7000
+
+    def test_rejects_negative_rows_per_day(self):
+        with pytest.raises(ValueError):
+            expected_rows_for_period(
+                "2026-04", rows_per_day=-1, now=date(2026, 4, 17)
+            )
+
+    def test_catches_partial_rebuild_shape(self):
+        # The postmortem shape: 720 rows observed mid-month when baseline is
+        # ~700 rows/day. Any reasonable safety factor flags this as too small.
+        expected = expected_rows_for_period(
+            "2026-04", rows_per_day=700, now=date(2026, 4, 17), safety_factor=0.5
+        )
+        # 720 observed < 5950 expected → caught.
+        assert 720 < expected

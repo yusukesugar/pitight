@@ -35,6 +35,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Iterable
 
@@ -118,6 +119,93 @@ def manifest_freshness_ok(manifest_path: Path, max_age_seconds: float) -> bool:
         return False
     age = time.time() - manifest_path.stat().st_mtime
     return age <= max_age_seconds
+
+
+# ============================================================
+# Date-aware row-count expectations
+# ============================================================
+
+
+def days_elapsed_in_period(period: str, now: date | None = None) -> int:
+    """Return the count of days from the start of ``period`` up to ``now``.
+
+    - If ``now`` is after the period ends, returns the full length of the
+      period (a completed past month or day).
+    - If ``now`` is inside the period, returns the elapsed days including
+      ``now`` itself.
+    - If ``now`` is before the period starts, returns 0.
+
+    Supports monthly (``YYYY-MM``) and daily (``YYYY-MM-DD``) period strings.
+
+    Examples:
+        >>> days_elapsed_in_period("2026-04", date(2026, 4, 17))
+        17
+        >>> days_elapsed_in_period("2026-04", date(2026, 5, 10))
+        30
+        >>> days_elapsed_in_period("2026-04", date(2026, 3, 31))
+        0
+
+    Raises:
+        ValueError: if ``period`` does not match ``YYYY-MM`` or ``YYYY-MM-DD``.
+    """
+    today = now if now is not None else date.today()
+    start, end = _period_bounds(period)
+    if today < start:
+        return 0
+    if today >= end:
+        return (end - start).days
+    return (today - start).days + 1
+
+
+def expected_rows_for_period(
+    period: str,
+    rows_per_day: float,
+    now: date | None = None,
+    safety_factor: float = 0.5,
+) -> int:
+    """Return a row-count minimum scaled by elapsed days in ``period``.
+
+    ``safety_factor`` is a buffer for day-to-day variance. A value of 0.5
+    means "require at least half of the baseline" — defaults err on the
+    permissive side so the check fails loudly only on clearly-incomplete
+    partitions (e.g. a single day of data when the month should have 17).
+
+    The product ``rows_per_day * safety_factor`` effectively declares the
+    lowest plausible row-count per day that still counts as "something ran".
+    Tune ``safety_factor`` up (e.g. 0.8) if the writer is very regular,
+    down (e.g. 0.3) if inputs are bursty.
+
+    Examples:
+        >>> # 2026-04 mid-month with ~700 rows/day baseline:
+        >>> expected_rows_for_period("2026-04", 700, date(2026, 4, 17), 0.5)
+        5950
+
+    Raises:
+        ValueError: if ``period`` is invalid or ``rows_per_day`` is negative.
+    """
+    if rows_per_day < 0:
+        raise ValueError(f"rows_per_day must be >= 0, got {rows_per_day}")
+    days = days_elapsed_in_period(period, now)
+    return int(days * rows_per_day * safety_factor)
+
+
+def _period_bounds(period: str) -> tuple[date, date]:
+    """Return ``(start_inclusive, end_exclusive)`` dates for a period string."""
+    parts = period.split("-")
+    if len(parts) == 2:
+        year, month = int(parts[0]), int(parts[1])
+        start = date(year, month, 1)
+        if month == 12:
+            end = date(year + 1, 1, 1)
+        else:
+            end = date(year, month + 1, 1)
+        return start, end
+    if len(parts) == 3:
+        dt = datetime.strptime(period, "%Y-%m-%d").date()
+        return dt, dt + timedelta(days=1)
+    raise ValueError(
+        f"Unsupported period format: {period!r}. Use 'YYYY-MM' or 'YYYY-MM-DD'."
+    )
 
 
 def upstream_newer_than(
