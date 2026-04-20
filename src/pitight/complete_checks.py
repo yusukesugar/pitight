@@ -1,10 +1,10 @@
 """Freshness-aware completeness checks for partitioned artifacts.
 
 Orchestrators like Luigi treat a task as "complete" when its output file
-exists. That is the single biggest silent-failure class we observed in the
-2026-04 choco postmortem: a 720-row parquet for a month that should have
-20,000 rows was marked complete, and every downstream stage silently
-consumed it.
+exists. That is one of the biggest silent-failure classes in partitioned
+pipelines: a parquet with only a fraction of its expected rows (e.g. 700
+when the month should have ~20,000) is marked complete, and every
+downstream stage silently consumes the partial data.
 
 This module provides pure functions that look **beyond file existence**:
 
@@ -73,8 +73,9 @@ def manifest_expected_present(
     """Check every ``expected`` period appears in the manifest's present list.
 
     Returns ``(ok, missing)``. ``missing`` is non-empty when ``ok`` is False.
-    Handles both the choco convention (``present_months``) and pitight's
-    newer ``present_periods`` key.
+    Accepts both ``present_periods`` (the current key written by
+    :func:`pitight.partition.build_manifest`) and the legacy
+    ``present_months`` key for backward compatibility.
     """
     manifest = _load_manifest(manifest_path)
     if manifest is None:
@@ -89,8 +90,8 @@ def manifest_expected_present(
 def manifest_min_row_count(manifest_path: Path, minimum: int) -> bool:
     """Return True iff ``stats_rollup.row_count_total >= minimum``.
 
-    A stale manifest from a 720-row partial rebuild fails this when the
-    subclass declares a sane minimum (e.g. expected_rows_per_day * 20).
+    A stale manifest from a partial rebuild fails this when the subclass
+    declares a sane minimum (e.g. expected_rows_per_day * expected_days).
     """
     manifest = _load_manifest(manifest_path)
     if manifest is None:

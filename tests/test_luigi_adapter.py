@@ -154,7 +154,8 @@ class TestFreshCompleteMixinExpectedPeriods:
 
 class TestFreshCompleteMixinRowCount:
     def test_row_count_below_minimum(self, tmp_path):
-        # This is the choco 2026-04 720-row shape.
+        # Shape: writer claims coverage_ok but only produced a fraction
+        # of the expected rows (partial rebuild / stale input).
         task, manifest, _ = _make_task(tmp_path, min_row_count=20000)
         _write_manifest(
             manifest,

@@ -99,7 +99,8 @@ class TestManifestMinRowCount:
             tmp_path / "manifest.json",
             {"stats_rollup": {"row_count_total": 720}},
         )
-        # 720-row 2026-04 snapshot — the postmortem shape.
+        # Partial-rebuild shape: writer claims done but only a fraction
+        # of expected rows landed.
         assert manifest_min_row_count(m, 20000) is False
 
     def test_missing_stats_rollup(self, tmp_path):
